@@ -13,35 +13,35 @@
       "columns": [
         {
           "name": "c_custkey",
-          "type": "integer"
+          "type": "INTEGER"
         },
         {
           "name": "c_name",
-          "type": "character varying"
+          "type": "VARCHAR(25)"
         },
         {
           "name": "c_address",
-          "type": "character varying"
+          "type": "VARCHAR(40)"
         },
         {
           "name": "c_nationkey",
-          "type": "integer"
+          "type": "INTEGER"
         },
         {
           "name": "c_phone",
-          "type": "character"
+          "type": "CHAR(15)"
         },
         {
           "name": "c_acctbal",
-          "type": "numeric"
+          "type": "NUMERIC(15, 2)"
         },
         {
           "name": "c_mktsegment",
-          "type": "character"
+          "type": "CHAR(10)"
         },
         {
           "name": "c_comment",
-          "type": "character varying"
+          "type": "VARCHAR(117)"
         }
       ],
       "primary_key": [
@@ -55,67 +55,67 @@
       "columns": [
         {
           "name": "l_orderkey",
-          "type": "integer"
+          "type": "INTEGER"
         },
         {
           "name": "l_partkey",
-          "type": "integer"
+          "type": "INTEGER"
         },
         {
           "name": "l_suppkey",
-          "type": "integer"
+          "type": "INTEGER"
         },
         {
           "name": "l_linenumber",
-          "type": "integer"
+          "type": "INTEGER"
         },
         {
           "name": "l_quantity",
-          "type": "numeric"
+          "type": "NUMERIC(15, 2)"
         },
         {
           "name": "l_extendedprice",
-          "type": "numeric"
+          "type": "NUMERIC(15, 2)"
         },
         {
           "name": "l_discount",
-          "type": "numeric"
+          "type": "NUMERIC(15, 2)"
         },
         {
           "name": "l_tax",
-          "type": "numeric"
+          "type": "NUMERIC(15, 2)"
         },
         {
           "name": "l_returnflag",
-          "type": "character"
+          "type": "CHAR(1)"
         },
         {
           "name": "l_linestatus",
-          "type": "character"
+          "type": "CHAR(1)"
         },
         {
           "name": "l_shipdate",
-          "type": "date"
+          "type": "DATE"
         },
         {
           "name": "l_commitdate",
-          "type": "date"
+          "type": "DATE"
         },
         {
           "name": "l_receiptdate",
-          "type": "date"
+          "type": "DATE"
         },
         {
           "name": "l_shipinstruct",
-          "type": "character"
+          "type": "CHAR(25)"
         },
         {
           "name": "l_shipmode",
-          "type": "character"
+          "type": "CHAR(10)"
         },
         {
           "name": "l_comment",
-          "type": "character varying"
+          "type": "VARCHAR(44)"
         }
       ],
       "primary_key": [
@@ -130,19 +130,19 @@
       "columns": [
         {
           "name": "n_nationkey",
-          "type": "integer"
+          "type": "INTEGER"
         },
         {
           "name": "n_name",
-          "type": "character"
+          "type": "CHAR(25)"
         },
         {
           "name": "n_regionkey",
-          "type": "integer"
+          "type": "INTEGER"
         },
         {
           "name": "n_comment",
-          "type": "character varying"
+          "type": "VARCHAR(152)"
         }
       ],
       "primary_key": [
@@ -156,39 +156,39 @@
       "columns": [
         {
           "name": "o_orderkey",
-          "type": "integer"
+          "type": "INTEGER"
         },
         {
           "name": "o_custkey",
-          "type": "integer"
+          "type": "INTEGER"
         },
         {
           "name": "o_orderstatus",
-          "type": "character"
+          "type": "CHAR(1)"
         },
         {
           "name": "o_totalprice",
-          "type": "numeric"
+          "type": "NUMERIC(15, 2)"
         },
         {
           "name": "o_orderdate",
-          "type": "date"
+          "type": "DATE"
         },
         {
           "name": "o_orderpriority",
-          "type": "character"
+          "type": "CHAR(15)"
         },
         {
           "name": "o_clerk",
-          "type": "character"
+          "type": "CHAR(15)"
         },
         {
           "name": "o_shippriority",
-          "type": "integer"
+          "type": "INTEGER"
         },
         {
           "name": "o_comment",
-          "type": "character varying"
+          "type": "VARCHAR(79)"
         }
       ],
       "primary_key": [
@@ -202,15 +202,15 @@
       "columns": [
         {
           "name": "r_regionkey",
-          "type": "integer"
+          "type": "INTEGER"
         },
         {
           "name": "r_name",
-          "type": "character"
+          "type": "CHAR(25)"
         },
         {
           "name": "r_comment",
-          "type": "character varying"
+          "type": "VARCHAR(152)"
         }
       ],
       "primary_key": [
@@ -224,31 +224,31 @@
       "columns": [
         {
           "name": "s_suppkey",
-          "type": "integer"
+          "type": "INTEGER"
         },
         {
           "name": "s_name",
-          "type": "character"
+          "type": "CHAR(25)"
         },
         {
           "name": "s_address",
-          "type": "character varying"
+          "type": "VARCHAR(40)"
         },
         {
           "name": "s_nationkey",
-          "type": "integer"
+          "type": "INTEGER"
         },
         {
           "name": "s_phone",
-          "type": "character"
+          "type": "CHAR(15)"
         },
         {
           "name": "s_acctbal",
-          "type": "numeric"
+          "type": "NUMERIC(15, 2)"
         },
         {
           "name": "s_comment",
-          "type": "character varying"
+          "type": "VARCHAR(101)"
         }
       ],
       "primary_key": [

@@ -3,7 +3,23 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
+from pathlib import Path
 from typing import Any
+
+# When this helper is executed as "python for_different_src/get_schema_details.py",
+# Python only puts for_different_src/ on sys.path. Add the project root so the
+# shared Redis schema cache helper can be imported reliably.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from schema_cache import (
+    DEFAULT_REDIS_URL,
+    DEFAULT_SCHEMA_CACHE_TTL_SECONDS,
+    SchemaCacheError,
+    save_schema_to_cache,
+)
 
 
 DRIVER_TO_DATABASE_TYPE = {
@@ -398,6 +414,25 @@ def main(
         "--output",
         help="Optional output JSON file. If omitted, JSON is printed.",
     )
+    parser.add_argument(
+        "--schema-cache-key",
+        required=True,
+        help=(
+            "Redis cache key where this schema should be stored for runtime "
+            "SQL generation. Example: snowflake:tpch_sf1:lineitem"
+        ),
+    )
+    parser.add_argument(
+        "--redis-url",
+        default=DEFAULT_REDIS_URL,
+        help=f"Redis URL for schema cache writes. Default: {DEFAULT_REDIS_URL}",
+    )
+    parser.add_argument(
+        "--schema-cache-ttl",
+        type=int,
+        default=DEFAULT_SCHEMA_CACHE_TTL_SECONDS,
+        help="Schema cache TTL in seconds. Default: 1200 (20 minutes).",
+    )
     args = parser.parse_args(argv)
 
     table_name = args.table or input("Enter table name: ").strip()
@@ -413,10 +448,23 @@ def main(
     )
     output = json.dumps(metadata, indent=2, default=str)
 
+    try:
+        redis_key = save_schema_to_cache(
+            schema=metadata,
+            cache_key=args.schema_cache_key,
+            redis_url=args.redis_url,
+            ttl_seconds=args.schema_cache_ttl,
+        )
+    except SchemaCacheError as error:
+        raise SystemExit(f"Schema cache error: {error}") from error
+
+    print(f"Schema cached in Redis at {redis_key}")
+
     if args.output:
         with open(args.output, "w", encoding="utf-8") as file:
             file.write(output)
             file.write("\n")
+        print(f"Schema written to {args.output}")
     else:
         print(output)
 

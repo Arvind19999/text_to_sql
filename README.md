@@ -11,7 +11,7 @@ The tool takes three inputs:
 
 1. A **database driver name** (e.g. `postgresql`, `mysql`, `snowflake`)
 2. A **natural-language instruction** (e.g. "Show total revenue per customer last month")
-3. A **JSON schema** describing the available tables, columns, and foreign-key relationships
+3. A **Redis schema cache key** containing the available tables, columns, and foreign-key relationships
 
 It produces one validated, read-only SQL query in the correct dialect for the
 chosen database.
@@ -22,6 +22,7 @@ Key features:
 - Conversation memory across turns (Redis cache + PostgreSQL durable store)
 - Follow-up resolution ("now filter by last month" → standalone instruction)
 - Schema auto-extraction from any supported SQL database (via SQLAlchemy Inspector)
+- Runtime schema loading from Redis, with JSON output kept only for validation/debugging
 
 ---
 
@@ -31,7 +32,7 @@ Key features:
                       ┌──────────────────────────────────┐
                       │  Your backend / API / CLI         │
                       └────────────┬─────────────────────┘
-                                   │ driver + question + schema JSON
+                                   │ driver + question + schema cache key
                                    ▼
           ┌────────────────────────────────────────────────┐
           │  query_ai_with_olama_and_deepseek.py            │
@@ -61,14 +62,15 @@ Key features:
    └───────────────────────────┘
 
    ┌───────────────────────────┐
-   │  get_schema_details.py     │   (run separately to generate schema JSON)
+   │  get_schema_details.py     │   (run separately to cache schema + write JSON)
    │                            │
    │  Works for ALL databases   │
    │  via SQLAlchemy Inspector  │
    │  Resolve selected table    │
    │  BFS over FK graph         │
    │  Fetch columns + PKs       │
-   │  Output schema JSON        │
+   │  Output JSON for review    │
+   │  Save schema to Redis      │
    └───────────────────────────┘
 
    ┌───────────────────────────┐
@@ -95,14 +97,16 @@ Key features:
 
 Connects to a PostgreSQL database and extracts schema metadata for a chosen
 starting table plus all tables reachable via foreign keys up to a configurable
-depth.  Outputs a JSON file that the SQL generator reads as its schema context.
+depth. It writes the runtime schema snapshot to Redis and can also write the
+same schema to JSON so you can inspect it manually.
 
 ### `query_ai_with_olama_and_deepseek.py`
 
-The main SQL generation engine.  Accepts a schema JSON, a driver name, and a
-natural-language instruction.  Builds a prompt, calls Ollama, validates and
-(if needed) self-corrects the output, and returns the final SQL string.  Also
-provides session-aware generation when a `session_id` is supplied.
+The main SQL generation engine. Accepts a Redis schema cache key, a driver
+name, and a natural-language instruction. Builds a prompt, calls Ollama,
+validates and (if needed) self-corrects the output, and returns the final SQL
+string. It still supports `--schema-file` as a fallback for local testing, but
+the normal runtime path is `--schema-cache-key`.
 
 ### `session_store.py`
 
@@ -142,16 +146,16 @@ The `requirements.txt` includes:
 | `PyMySQL>=1.1` | MySQL support for SQLAlchemy |
 | `mariadb>=1.1` | MariaDB support for SQLAlchemy |
 | `snowflake-sqlalchemy>=1.10.1` | Snowflake support for SQLAlchemy |
+| `sqlglot==30.11.0` | Dialect-aware SQL syntax validation |
 
 **Optional packages** (install to enable the respective features):
 
 ```bash
-pip install sqlglot          # enables sqlglot syntax validation
 pip install psycopg2-binary  # alternative PostgreSQL adapter (fallback)
 ```
 
-SQLAlchemy and sqlglot are optional — the tool works without them, it simply
-skips the validation layers that require them.
+SQLAlchemy is installed by default. Live EXPLAIN validation still only runs
+when you pass `--connection-string`.
 
 ### Infrastructure (Docker Compose)
 
@@ -163,72 +167,170 @@ docker compose up -d
 
 ---
 
-## Step 1: Extract Schema from PostgreSQL
+## How To Run
+
+Use the project virtualenv for all Python commands:
 
 ```bash
-# Fetch schema for the `orders` table and directly related tables (depth=1):
-python get_postgreql_Details.py \
-    --connection-string "postgresql://user:pass@localhost:5432/mydb" \
-    --table orders \
-    --depth 1 \
-    --output selected_schema.json
+cd /home/arvind/Desktop/courses_practice/sql_ai
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
-# Use a schema-qualified name:
-python get_postgreql_Details.py \
-    --table public.orders \
-    --output selected_schema.json
+Start the local infrastructure:
 
-# Increase depth to pull in two hops of FK relationships:
-python get_postgreql_Details.py \
-    --table orders \
-    --depth 2 \
-    --output selected_schema.json
+```bash
+docker compose up -d
+```
+
+Start Ollama in another terminal if it is not already running:
+
+```bash
+ollama serve
+```
+
+Pull the model once:
+
+```bash
+ollama pull deepseek-coder-v2:16b
+```
+
+### 1. Cache Schema And Write JSON
+
+This step connects to the source database, extracts schema metadata, writes it
+to Redis for runtime use, and also writes `selected_schema.json` for your
+manual validation.
+
+PostgreSQL-specific extractor:
+
+```bash
+venv/bin/python get_postgreql_Details.py \
+  --connection-string 'postgresql://user:password@host:5432/database' \
+  --table public.customer \
+  --depth 2 \
+  --schema-cache-key postgresql:database:public.customer \
+  --output selected_schema.json
+```
+
+Generic extractor for other databases:
+
+```bash
+venv/bin/python for_different_src/get_schema_details.py \
+  --driver snowflake \
+  --connection-string 'snowflake://user:password@account/database/schema?warehouse=COMPUTE_WH&role=ROLE_NAME' \
+  --table schema.table_name \
+  --depth 2 \
+  --schema-cache-key snowflake:database:schema.table_name \
+  --output selected_schema.json
+```
+
+The cache key can be any stable name, but keep it unique per connection and
+schema/table scope:
+
+```text
+<driver>:<database_or_connection>:<schema.table>
+```
+
+Examples:
+
+```text
+postgresql:tpch:public.customer
+mysql:telecoms:customers
+snowflake:SNOWFLAKE_SAMPLE_DATA:TPCH_SF1.LINEITEM
+mssql:salesdb:dbo.orders
+```
+
+Schema cache TTL defaults to 20 minutes. Override it when needed:
+
+```bash
+--schema-cache-ttl 600
+```
+
+### 2. Run Query Without Chat Memory
+
+Use this for one-shot questions. The LLM reads schema from Redis using
+`--schema-cache-key`; it does not read `selected_schema.json`.
+
+```bash
+venv/bin/python query_ai_with_olama_and_deepseek.py \
+  --driver postgresql \
+  --schema-cache-key postgresql:database:public.customer \
+  --question "show total orders by customer"
+```
+
+### 3. Run Query With Chat Memory
+
+Use this for a chat screen and follow-up questions. Keep the same
+`--session-id` for the same chat plus same connection/schema scope.
+
+```bash
+venv/bin/python query_ai_with_olama_and_deepseek.py \
+  --driver postgresql \
+  --schema-cache-key postgresql:database:public.customer \
+  --session-id chat-123:postgresql:database:public.customer \
+  --question "show total orders by customer"
+```
+
+Follow-up:
+
+```bash
+venv/bin/python query_ai_with_olama_and_deepseek.py \
+  --driver postgresql \
+  --schema-cache-key postgresql:database:public.customer \
+  --session-id chat-123:postgresql:database:public.customer \
+  --show-resolved \
+  --question "now only for 2024"
+```
+
+For a different database or different schema/table scope, use a different
+`--session-id` and a different `--schema-cache-key`.
+
+### 4. Run Query With Live EXPLAIN Validation
+
+Pass the source database connection string if you want the generated SQL to be
+validated against the live database before it is returned.
+
+```bash
+venv/bin/python query_ai_with_olama_and_deepseek.py \
+  --driver postgresql \
+  --schema-cache-key postgresql:database:public.customer \
+  --connection-string 'postgresql://user:password@host:5432/database' \
+  --max-retries 5 \
+  --question "show top 10 customers by revenue"
+```
+
+### 5. Check Stored Session Metadata
+
+Session rows store the internal UUID plus readable metadata:
+
+```sql
+SELECT
+  id,
+  memory_key,
+  schema_cache_key,
+  driver_name,
+  database_name,
+  updated_at
+FROM chat_sessions
+ORDER BY updated_at DESC;
+```
+
+Turn history is stored in `chat_turns`:
+
+```sql
+SELECT
+  session_id,
+  user_instruction,
+  resolved_instruction,
+  generated_sql,
+  created_at
+FROM chat_turns
+ORDER BY id DESC;
 ```
 
 ---
 
-## Step 2: Generate SQL
-
-### Stateless (single turn, no session memory)
-
-```bash
-python query_ai_with_olama_and_deepseek.py \
-    --driver postgresql \
-    --question "Show me total revenue per customer for 2024" \
-    --schema-file selected_schema.json
-```
-
-### With session memory (follow-up questions)
-
-```bash
-# First turn:
-python query_ai_with_olama_and_deepseek.py \
-    --driver postgresql \
-    --question "Show me total orders per customer" \
-    --schema-file selected_schema.json \
-    --session-id my-session-1
-
-# Follow-up turn (model resolves "now filter" using prior context):
-python query_ai_with_olama_and_deepseek.py \
-    --driver postgresql \
-    --question "Now filter to only last month" \
-    --schema-file selected_schema.json \
-    --session-id my-session-1 \
-    --show-resolved
-```
-
-### With live EXPLAIN validation
-
-```bash
-python query_ai_with_olama_and_deepseek.py \
-    --driver postgresql \
-    --question "List all products with their supplier names" \
-    --schema-file selected_schema.json \
-    --connection-string "postgresql://user:pass@localhost:5432/mydb" \
-    --max-retries 5
-```
-
-### Other useful flags
+## Command Flags
 
 | Flag | Default | Description |
 |---|---|---|
@@ -236,6 +338,8 @@ python query_ai_with_olama_and_deepseek.py \
 | `--timeout` | `600` | Ollama request timeout (seconds) |
 | `--max-retries` | `3` | Self-correction retry attempts |
 | `--connection-string` | _(none)_ | SQLAlchemy URL for EXPLAIN validation |
+| `--schema-cache-key` | _(none)_ | Redis key used as the runtime schema source |
+| `--schema-file` | _(none)_ | JSON schema fallback when no cache key is provided |
 | `--session-id` | _(none)_ | Enable session memory |
 | `--history-turns` | `5` | Number of prior turns to load |
 | `--session-ttl` | `86400` | Redis key TTL in seconds (24 h) |
@@ -267,9 +371,9 @@ remove_markdown_fences()  ← strip ```sql ... ``` wrappers
       │           no forbidden words (INSERT, UPDATE, DROP, etc.)
       │
       ▼
-[Layer 2] validate_sql_syntax()          ← requires sqlglot (optional)
+[Layer 2] validate_sql_syntax()          ← uses sqlglot
       │   Dialect-aware AST parse via sqlglot.parse_one(sql, dialect=...)
-      │   Skip if sqlglot not installed or driver has no sqlglot dialect
+      │   Skip only if the driver has no sqlglot dialect mapping
       │
       ▼
 [Layer 3] validate_sql_with_explain()    ← requires sqlalchemy + DB (optional)
@@ -338,10 +442,14 @@ load_recent_turns("abc")
 
 ---
 
-## Schema JSON Format
+## Schema Cache / JSON Format
 
-The `--schema-file` JSON accepted by `query_ai_with_olama_and_deepseek.py`
-can be either:
+The schema extractor saves this payload into Redis under `--schema-cache-key`.
+It can also write the same payload to `--output` as JSON for manual validation.
+At runtime, `query_ai_with_olama_and_deepseek.py --schema-cache-key ...` reads
+from Redis and does not read the JSON file.
+
+The fallback `--schema-file` JSON format can be either:
 
 ### Simple list format (minimum required)
 
@@ -466,14 +574,15 @@ ollama pull deepseek-coder-v2:16b
 docker compose up -d
 
 # 3. Extract schema from your database
-python get_postgreql_Details.py \
+venv/bin/python get_postgreql_Details.py \
     --connection-string "postgresql://user:pass@localhost:5432/mydb" \
     --table orders \
+    --schema-cache-key postgresql:mydb:orders \
     --output selected_schema.json
 
 # 4. Generate SQL
-python query_ai_with_olama_and_deepseek.py \
+venv/bin/python query_ai_with_olama_and_deepseek.py \
     --driver postgresql \
     --question "Top 10 customers by total spend in 2024" \
-    --schema-file selected_schema.json
+    --schema-cache-key postgresql:mydb:orders
 ```

@@ -45,6 +45,13 @@ import argparse
 import json
 from typing import Any
 
+from schema_cache import (
+    DEFAULT_SCHEMA_CACHE_TTL_SECONDS,
+    DEFAULT_REDIS_URL,
+    SchemaCacheError,
+    save_schema_to_cache,
+)
+
 
 # ---
 # System schemas to skip when searching for user tables.
@@ -564,7 +571,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Fetch schema metadata for any supported SQL database. "
-            "Outputs a JSON file compatible with query_ai_with_olama_and_deepseek.py."
+            "Writes the runtime schema to Redis and can also output JSON for review."
         )
     )
     parser.add_argument(
@@ -610,6 +617,28 @@ def main() -> None:
             "If omitted, JSON is printed to stdout."
         ),
     )
+    parser.add_argument(
+        "--schema-cache-key",
+        required=True,
+        help=(
+            "Redis cache key where this schema should be stored for runtime "
+            "SQL generation. Example: snowflake:tpch_sf1:lineitem"
+        ),
+    )
+    parser.add_argument(
+        "--redis-url",
+        default=None,
+        help=(
+            "Redis URL for schema cache writes. If omitted, the same default "
+            "Redis URL used by session_store.py is used."
+        ),
+    )
+    parser.add_argument(
+        "--schema-cache-ttl",
+        type=int,
+        default=DEFAULT_SCHEMA_CACHE_TTL_SECONDS,
+        help="Schema cache TTL in seconds. Default: 1200 (20 minutes).",
+    )
     args = parser.parse_args()
 
     # Prompt for table name interactively if not passed as a flag
@@ -632,6 +661,23 @@ def main() -> None:
     # Serialise: use default=str to handle SQLAlchemy type objects gracefully
     output_json = json.dumps(metadata, indent=2, default=str)
 
+    # Runtime path: write the schema to Redis. The SQL generator will read this
+    # cached copy instead of reading the JSON file when --schema-cache-key is
+    # provided there.
+    try:
+        redis_key = save_schema_to_cache(
+            schema=metadata,
+            cache_key=args.schema_cache_key,
+            redis_url=args.redis_url or DEFAULT_REDIS_URL,
+            ttl_seconds=args.schema_cache_ttl,
+        )
+    except SchemaCacheError as error:
+        raise SystemExit(f"Schema cache error: {error}") from error
+
+    print(f"Schema cached in Redis at {redis_key}")
+
+    # Debug/validation path: also write the JSON file so you can inspect the
+    # exact schema snapshot that was placed in Redis.
     if args.output:
         with open(args.output, "w", encoding="utf-8") as file:
             file.write(output_json)

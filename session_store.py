@@ -188,13 +188,14 @@ class SessionStore:
         turn: SessionTurn,
         driver_name: str,
         database_name: str | None = None,
+        schema_cache_key: str | None = None,
     ) -> None:
         """
         Persist a completed turn to both Redis and PostgreSQL.
 
         Redis write  : append → trim to max_recent_turns → reset TTL.
-        Postgres write: upsert the chat_sessions row (updates driver/db/timestamp)
-                        and insert a new chat_turns row.
+        Postgres write: upsert the chat_sessions row (updates driver/db/schema
+                        context/timestamp) and insert a new chat_turns row.
 
         Both writes happen for every turn to keep the two stores in sync.
         """
@@ -204,6 +205,7 @@ class SessionStore:
             turn=turn,
             driver_name=driver_name,
             database_name=database_name,
+            schema_cache_key=schema_cache_key,
         )
 
     def init_postgres(self) -> None:
@@ -218,6 +220,8 @@ class SessionStore:
         ------
         chat_sessions — one row per logical conversation session.
           id           UUID PRIMARY KEY — the normalised session UUID.
+          memory_key   TEXT             — original readable session id.
+          schema_cache_key TEXT         — Redis schema key used by this chat.
           user_id      TEXT             — optional external user identifier.
           database_name TEXT            — the database being queried.
           driver_name   TEXT            — the database driver/dialect.
@@ -238,12 +242,42 @@ class SessionStore:
                     """
                     CREATE TABLE IF NOT EXISTS chat_sessions (
                         id UUID PRIMARY KEY,
+                        memory_key TEXT,
+                        schema_cache_key TEXT,
                         user_id TEXT,
                         database_name TEXT,
                         driver_name TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
+                    """
+                )
+                # Older local databases may already have chat_sessions without
+                # these metadata columns. Add them idempotently so the readable
+                # memory key and Redis schema key become visible without
+                # dropping existing chat history.
+                cursor.execute(
+                    """
+                    ALTER TABLE chat_sessions
+                    ADD COLUMN IF NOT EXISTS memory_key TEXT;
+                    """
+                )
+                cursor.execute(
+                    """
+                    ALTER TABLE chat_sessions
+                    ADD COLUMN IF NOT EXISTS schema_cache_key TEXT;
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_chat_sessions_memory_key
+                    ON chat_sessions (memory_key);
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_chat_sessions_schema_cache_key
+                    ON chat_sessions (schema_cache_key);
                     """
                 )
                 cursor.execute(
@@ -467,6 +501,7 @@ class SessionStore:
         turn: SessionTurn,
         driver_name: str,
         database_name: str | None = None,
+        schema_cache_key: str | None = None,
     ) -> None:
         """
         Persist a turn to PostgreSQL with an upsert on the session row.
@@ -475,8 +510,12 @@ class SessionStore:
 
         1. INSERT ... ON CONFLICT DO UPDATE on chat_sessions:
            - Creates the session row on first write.
-           - On subsequent writes, updates driver_name, database_name, and
-             updated_at so the session row always reflects the latest context.
+           - Stores both ids:
+             * id is a UUID-safe stable version for joins.
+             * memory_key is the original readable session id from the app.
+           - On subsequent writes, updates driver_name, database_name,
+             schema_cache_key, and updated_at so the session row always
+             reflects the latest context.
 
         2. INSERT into chat_turns:
            - Appends the new turn row with the session FK.
@@ -491,18 +530,28 @@ class SessionStore:
                     """
                     INSERT INTO chat_sessions (
                         id,
+                        memory_key,
+                        schema_cache_key,
                         driver_name,
                         database_name,
                         updated_at
                     )
-                    VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                    VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                     ON CONFLICT (id)
                     DO UPDATE SET
+                        memory_key = EXCLUDED.memory_key,
+                        schema_cache_key = EXCLUDED.schema_cache_key,
                         driver_name = EXCLUDED.driver_name,
                         database_name = EXCLUDED.database_name,
                         updated_at = CURRENT_TIMESTAMP;
                     """,
-                    (history_session_id, driver_name, database_name),
+                    (
+                        history_session_id,
+                        session_id,
+                        schema_cache_key,
+                        driver_name,
+                        database_name,
+                    ),
                 )
                 # Insert the turn — always a new row, never updated
                 cursor.execute(

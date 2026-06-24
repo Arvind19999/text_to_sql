@@ -53,6 +53,7 @@ from session_store import (
     SessionStore,
     SessionTurn,
 )
+from schema_cache import SchemaCacheError, load_schema_from_cache
 
 # ---
 # Model + Ollama endpoint configuration
@@ -963,6 +964,7 @@ def generate_sql_with_session(
     schema: list[dict[str, Any]] | dict[str, Any],
     session_store: SessionStore,
     database_name: str | None = None,
+    schema_cache_key: str | None = None,
     model: str = MODEL_NAME,
     timeout: int = 600,
     connection_string: str | None = None,
@@ -984,6 +986,8 @@ def generate_sql_with_session(
     Parameters
     ----------
     session_id         : Opaque session identifier string.
+    schema_cache_key   : Redis schema key used for this request, saved with
+                         the session row for auditing/debugging.
     connection_string  : Optional SQLAlchemy URL forwarded to generate_sql().
     max_retries        : Forwarded to generate_sql().
 
@@ -1025,6 +1029,7 @@ def generate_sql_with_session(
         ),
         driver_name=driver_name,
         database_name=database_name,
+        schema_cache_key=schema_cache_key,
     )
 
     return sql, resolved_instruction
@@ -1068,7 +1073,20 @@ def main() -> None:
     # --- Required arguments ---
     parser.add_argument("--driver", required=True, help="Database driver name.")
     parser.add_argument("--question", required=True, help="Natural-language request.")
-    parser.add_argument("--schema-file", required=True, help="JSON schema file path.")
+    parser.add_argument(
+        "--schema-file",
+        help=(
+            "JSON schema file path. Used only when --schema-cache-key is not "
+            "provided; cache-backed runtime generation reads schema from Redis."
+        ),
+    )
+    parser.add_argument(
+        "--schema-cache-key",
+        help=(
+            "Redis schema cache key to use as the LLM schema source. When this "
+            "is provided, --schema-file is ignored for generation."
+        ),
+    )
 
     # --- Optional generation arguments ---
     parser.add_argument("--database", help="Optional database name.")
@@ -1107,7 +1125,10 @@ def main() -> None:
     parser.add_argument(
         "--redis-url",
         default=DEFAULT_REDIS_URL,
-        help=f"Redis URL for the active session cache. Default: {DEFAULT_REDIS_URL}",
+        help=(
+            "Redis URL for schema cache reads and active session cache. "
+            f"Default: {DEFAULT_REDIS_URL}"
+        ),
     )
     parser.add_argument(
         "--history-db-url",
@@ -1137,9 +1158,27 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Load the JSON schema from disk
-    with open(args.schema_file, "r", encoding="utf-8") as file:
-        schema = json.load(file)
+    if not args.schema_cache_key and not args.schema_file:
+        raise SystemExit(
+            "Pass --schema-cache-key for Redis schema or --schema-file for JSON fallback."
+        )
+
+    # Preferred runtime path: feed the LLM from Redis, not from the JSON file.
+    # The JSON file can still be produced by the extractor for manual review,
+    # but it is intentionally ignored whenever a cache key is supplied.
+    if args.schema_cache_key:
+        try:
+            schema = load_schema_from_cache(
+                cache_key=args.schema_cache_key,
+                redis_url=args.redis_url,
+            )
+        except SchemaCacheError as error:
+            raise SystemExit(f"Schema cache error: {error}") from error
+    else:
+        # Backward-compatible fallback for local testing or when Redis is not
+        # available. This path is not used by the cache-backed production flow.
+        with open(args.schema_file, "r", encoding="utf-8") as file:
+            schema = json.load(file)
 
     try:
         if args.session_id:
@@ -1157,6 +1196,7 @@ def main() -> None:
                 schema=schema,
                 session_store=session_store,
                 database_name=args.database,
+                schema_cache_key=args.schema_cache_key,
                 model=args.model,
                 timeout=args.timeout,
                 connection_string=args.connection_string,

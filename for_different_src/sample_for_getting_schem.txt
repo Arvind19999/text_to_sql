@@ -4,10 +4,11 @@ python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schem
   --connection-string 'mysql+pymysql://db_superadmin:DbSup3rAdm1n!2026@mysql.db.datafuseai.org:13306/telecoms' \
   --table telecoms.customers \
   --depth 1 \
+  --schema-cache-key mysql:telecoms:customers \
   --output selected_schema.json
 
 for question ask
-python3 query_ai_with_olama_and_deepseek.py   --driver mysql --session-id test-session-1   --schema-file selected_schema.json   --question " i want to get customer name,email,birth date, call durations, what  devices he/she has used, users region details with tax amount "
+python3 query_ai_with_olama_and_deepseek.py   --driver mysql --session-id test-session-1   --schema-cache-key mysql:telecoms:customers   --question " i want to get customer name,email,birth date, call durations, what  devices he/she has used, users region details with tax amount "
 
 =================================================================================================================================================================================================================================================================================================
 
@@ -18,10 +19,11 @@ python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schem
   --connection-string 'mariadb+pymysql://tpch_writer:TpchWr1te!2026@mariadb.db.datafuseai.org:13307/tpch_maria_results' \
   --table tpch_maria_results.departments \
   --depth 2 \
+  --schema-cache-key mariadb:tpch_maria_results:departments \
   --output selected_schema.json
 
 
-python3 query_ai_with_olama_and_deepseek.py   --driver mariadb --session-id test-maraidb-session-1   --schema-file selected_schema.json   --question "employee belonging to Engineering, get theri email ,when they joined with their perks also get the porjects they are involved"
+python3 query_ai_with_olama_and_deepseek.py   --driver mariadb --session-id test-maraidb-session-1   --schema-cache-key mariadb:tpch_maria_results:departments   --question "employee belonging to Engineering, get theri email ,when they joined with their perks also get the porjects they are involved"
 
 =================================================================================================================================================================================================================================================================================================
 
@@ -32,6 +34,7 @@ python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schem
   --schema dbo \
   --table users \
   --depth 1 \
+  --schema-cache-key mssql:database:dbo.users \
   --output selected_schema.json
 
 =================================================================================================================================================================================================================================================================================================
@@ -43,6 +46,7 @@ python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schem
   --schema USER_SCHEMA \
   --table USERS \
   --depth 1 \
+  --schema-cache-key oracle:service:USER_SCHEMA.USERS \
   --output selected_schema.json
 =================================================================================================================================================================================================================================================================================================
 
@@ -53,6 +57,7 @@ python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schem
   --schema USER_SCHEMA \
   --table USERS \
   --depth 1 \
+  --schema-cache-key ibmdb2:database:USER_SCHEMA.USERS \
   --output selected_schema.json
 =================================================================================================================================================================================================================================================================================================
 
@@ -63,6 +68,7 @@ python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schem
   --schema USER_SCHEMA \
   --table USERS \
   --depth 1 \
+  --schema-cache-key saphana:USER_SCHEMA.USERS \
   --output selected_schema.json
 =================================================================================================================================================================================================================================================================================================
 
@@ -72,10 +78,11 @@ python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schem
   --connection-string 'snowflake://ARVIND:Qwerty*999999#@OWIQJTD-YH63222/SNOWFLAKE_SAMPLE_DATA/TPCH_SF1?warehouse=COMPUTE_WH&role=ACCOUNTADMIN' \
   --table tpch_sf1000.lineitem \
   --depth 2 \
+  --schema-cache-key snowflake:SNOWFLAKE_SAMPLE_DATA:TPCH_SF1.LINEITEM \
   --output selected_schema.json
 
 
-python3 query_ai_with_olama_and_deepseek.py   --driver snowflake --session-id test-snowflake-session-1   --schema-file selected_schema.json   --question "get me python code to check palindrom number"
+python3 query_ai_with_olama_and_deepseek.py   --driver snowflake --session-id test-snowflake-session-1   --schema-cache-key snowflake:SNOWFLAKE_SAMPLE_DATA:TPCH_SF1.LINEITEM   --question "get me python code to check palindrom number"
 
 =================================================================================================================================================================================================================================================================================================
 
@@ -86,6 +93,7 @@ python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schem
   --schema public \
   --table users \
   --depth 1 \
+  --schema-cache-key postgresql:database:public.users \
   --output selected_schema.json
 
 

@@ -56,6 +56,13 @@ import argparse
 import json
 from typing import Any
 
+from schema_cache import (
+    DEFAULT_REDIS_URL,
+    DEFAULT_SCHEMA_CACHE_TTL_SECONDS,
+    SchemaCacheError,
+    save_schema_to_cache,
+)
+
 
 # ---
 # Default connection string
@@ -661,6 +668,25 @@ def main() -> None:
         "--output",
         help="Optional output JSON file. If omitted, JSON is printed to stdout.",
     )
+    parser.add_argument(
+        "--schema-cache-key",
+        required=True,
+        help=(
+            "Redis cache key where this schema should be stored for runtime "
+            "SQL generation. Example: postgresql:tpch:customer"
+        ),
+    )
+    parser.add_argument(
+        "--redis-url",
+        default=DEFAULT_REDIS_URL,
+        help=f"Redis URL for schema cache writes. Default: {DEFAULT_REDIS_URL}",
+    )
+    parser.add_argument(
+        "--schema-cache-ttl",
+        type=int,
+        default=DEFAULT_SCHEMA_CACHE_TTL_SECONDS,
+        help="Schema cache TTL in seconds. Default: 1200 (20 minutes).",
+    )
     args = parser.parse_args()
 
     # Allow interactive input when --table is not provided on the command line
@@ -676,11 +702,27 @@ def main() -> None:
     )
     output = json.dumps(metadata, indent=2, default=str)
 
+    # Runtime path: Redis is the schema source used by the generator when it is
+    # called with the same --schema-cache-key.
+    try:
+        redis_key = save_schema_to_cache(
+            schema=metadata,
+            cache_key=args.schema_cache_key,
+            redis_url=args.redis_url,
+            ttl_seconds=args.schema_cache_ttl,
+        )
+    except SchemaCacheError as error:
+        raise SystemExit(f"Schema cache error: {error}") from error
+
+    print(f"Schema cached in Redis at {redis_key}")
+
     if args.output:
-        # Write to file — newline at end for POSIX compliance
+        # Validation/debug path: keep a JSON snapshot so the schema that was
+        # cached can be inspected by humans without reading Redis directly.
         with open(args.output, "w", encoding="utf-8") as file:
             file.write(output)
             file.write("\n")
+        print(f"Schema written to {args.output}")
     else:
         print(output)
 

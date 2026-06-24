@@ -2,171 +2,300 @@
   "database_type": "PostgreSQL",
   "selected_table": {
     "schema": "public",
-    "name": "employee"
+    "name": "customer"
   },
-  "relationship_depth": 1,
+  "relationship_depth": 2,
   "tables": [
     {
       "schema": "public",
-      "name": "employee",
+      "name": "customer",
       "type": "BASE TABLE",
       "columns": [
         {
-          "name": "employee_id",
+          "name": "c_custkey",
           "type": "integer"
         },
         {
-          "name": "first_name",
+          "name": "c_name",
           "type": "character varying"
         },
         {
-          "name": "last_name",
+          "name": "c_address",
           "type": "character varying"
         },
         {
-          "name": "email",
-          "type": "character varying"
+          "name": "c_nationkey",
+          "type": "integer"
         },
         {
-          "name": "phone",
-          "type": "character varying"
+          "name": "c_phone",
+          "type": "character"
         },
         {
-          "name": "hire_date",
-          "type": "date"
-        },
-        {
-          "name": "department",
-          "type": "character varying"
-        },
-        {
-          "name": "job_title",
-          "type": "character varying"
-        },
-        {
-          "name": "salary",
+          "name": "c_acctbal",
           "type": "numeric"
         },
         {
-          "name": "status",
+          "name": "c_mktsegment",
+          "type": "character"
+        },
+        {
+          "name": "c_comment",
           "type": "character varying"
-        },
-        {
-          "name": "manager_id",
-          "type": "integer"
-        },
-        {
-          "name": "created_at",
-          "type": "timestamp without time zone"
         }
       ],
       "primary_key": [
-        "employee_id"
+        "c_custkey"
       ]
     },
     {
       "schema": "public",
-      "name": "employee_details",
+      "name": "lineitem",
       "type": "BASE TABLE",
       "columns": [
         {
-          "name": "detail_id",
+          "name": "l_orderkey",
           "type": "integer"
         },
         {
-          "name": "employee_id",
+          "name": "l_partkey",
           "type": "integer"
         },
         {
-          "name": "date_of_birth",
-          "type": "date"
-        },
-        {
-          "name": "gender",
-          "type": "character varying"
-        },
-        {
-          "name": "marital_status",
-          "type": "character varying"
-        },
-        {
-          "name": "nationality",
-          "type": "character varying"
-        },
-        {
-          "name": "address_line1",
-          "type": "character varying"
-        },
-        {
-          "name": "city",
-          "type": "character varying"
-        },
-        {
-          "name": "state",
-          "type": "character varying"
-        },
-        {
-          "name": "country",
-          "type": "character varying"
-        },
-        {
-          "name": "postal_code",
-          "type": "character varying"
-        },
-        {
-          "name": "education_level",
-          "type": "character varying"
-        },
-        {
-          "name": "years_of_experience",
+          "name": "l_suppkey",
           "type": "integer"
         },
         {
-          "name": "performance_score",
+          "name": "l_linenumber",
+          "type": "integer"
+        },
+        {
+          "name": "l_quantity",
           "type": "numeric"
         },
         {
-          "name": "last_promotion_date",
-          "type": "date"
-        },
-        {
-          "name": "bonus_percentage",
+          "name": "l_extendedprice",
           "type": "numeric"
         },
         {
-          "name": "is_remote",
-          "type": "boolean"
+          "name": "l_discount",
+          "type": "numeric"
         },
         {
-          "name": "contract_type",
+          "name": "l_tax",
+          "type": "numeric"
+        },
+        {
+          "name": "l_returnflag",
+          "type": "character"
+        },
+        {
+          "name": "l_linestatus",
+          "type": "character"
+        },
+        {
+          "name": "l_shipdate",
+          "type": "date"
+        },
+        {
+          "name": "l_commitdate",
+          "type": "date"
+        },
+        {
+          "name": "l_receiptdate",
+          "type": "date"
+        },
+        {
+          "name": "l_shipinstruct",
+          "type": "character"
+        },
+        {
+          "name": "l_shipmode",
+          "type": "character"
+        },
+        {
+          "name": "l_comment",
           "type": "character varying"
-        },
-        {
-          "name": "emergency_contact",
-          "type": "character varying"
-        },
-        {
-          "name": "notes",
-          "type": "text"
-        },
-        {
-          "name": "updated_at",
-          "type": "timestamp without time zone"
         }
       ],
       "primary_key": [
-        "detail_id"
+        "l_orderkey",
+        "l_linenumber"
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "nation",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "n_nationkey",
+          "type": "integer"
+        },
+        {
+          "name": "n_name",
+          "type": "character"
+        },
+        {
+          "name": "n_regionkey",
+          "type": "integer"
+        },
+        {
+          "name": "n_comment",
+          "type": "character varying"
+        }
+      ],
+      "primary_key": [
+        "n_nationkey"
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "orders",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "o_orderkey",
+          "type": "integer"
+        },
+        {
+          "name": "o_custkey",
+          "type": "integer"
+        },
+        {
+          "name": "o_orderstatus",
+          "type": "character"
+        },
+        {
+          "name": "o_totalprice",
+          "type": "numeric"
+        },
+        {
+          "name": "o_orderdate",
+          "type": "date"
+        },
+        {
+          "name": "o_orderpriority",
+          "type": "character"
+        },
+        {
+          "name": "o_clerk",
+          "type": "character"
+        },
+        {
+          "name": "o_shippriority",
+          "type": "integer"
+        },
+        {
+          "name": "o_comment",
+          "type": "character varying"
+        }
+      ],
+      "primary_key": [
+        "o_orderkey"
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "region",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "r_regionkey",
+          "type": "integer"
+        },
+        {
+          "name": "r_name",
+          "type": "character"
+        },
+        {
+          "name": "r_comment",
+          "type": "character varying"
+        }
+      ],
+      "primary_key": [
+        "r_regionkey"
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "supplier",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "s_suppkey",
+          "type": "integer"
+        },
+        {
+          "name": "s_name",
+          "type": "character"
+        },
+        {
+          "name": "s_address",
+          "type": "character varying"
+        },
+        {
+          "name": "s_nationkey",
+          "type": "integer"
+        },
+        {
+          "name": "s_phone",
+          "type": "character"
+        },
+        {
+          "name": "s_acctbal",
+          "type": "numeric"
+        },
+        {
+          "name": "s_comment",
+          "type": "character varying"
+        }
+      ],
+      "primary_key": [
+        "s_suppkey"
       ]
     }
   ],
   "relationships": [
     {
       "from_schema": "public",
-      "from_table": "employee_details",
-      "from_column": "employee_id",
+      "from_table": "customer",
+      "from_column": "c_nationkey",
       "to_schema": "public",
-      "to_table": "employee",
-      "to_column": "employee_id"
+      "to_table": "nation",
+      "to_column": "n_nationkey"
+    },
+    {
+      "from_schema": "public",
+      "from_table": "lineitem",
+      "from_column": "l_orderkey",
+      "to_schema": "public",
+      "to_table": "orders",
+      "to_column": "o_orderkey"
+    },
+    {
+      "from_schema": "public",
+      "from_table": "nation",
+      "from_column": "n_regionkey",
+      "to_schema": "public",
+      "to_table": "region",
+      "to_column": "r_regionkey"
+    },
+    {
+      "from_schema": "public",
+      "from_table": "orders",
+      "from_column": "o_custkey",
+      "to_schema": "public",
+      "to_table": "customer",
+      "to_column": "c_custkey"
+    },
+    {
+      "from_schema": "public",
+      "from_table": "supplier",
+      "from_column": "s_nationkey",
+      "to_schema": "public",
+      "to_table": "nation",
+      "to_column": "n_nationkey"
     }
   ]
 }
