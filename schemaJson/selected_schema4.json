@@ -1,0 +1,83 @@
+{
+  "database_type": "Snowflake",
+  "selected_table": {
+    "schema": "tpch_sf1000",
+    "name": "lineitem"
+  },
+  "relationship_depth": 1,
+  "tables": [
+    {
+      "schema": "tpch_sf1000",
+      "name": "lineitem",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "l_orderkey",
+          "type": "DECIMAL(38, 0)"
+        },
+        {
+          "name": "l_partkey",
+          "type": "DECIMAL(38, 0)"
+        },
+        {
+          "name": "l_suppkey",
+          "type": "DECIMAL(38, 0)"
+        },
+        {
+          "name": "l_linenumber",
+          "type": "DECIMAL(38, 0)"
+        },
+        {
+          "name": "l_quantity",
+          "type": "DECIMAL(12, 2)"
+        },
+        {
+          "name": "l_extendedprice",
+          "type": "DECIMAL(12, 2)"
+        },
+        {
+          "name": "l_discount",
+          "type": "DECIMAL(12, 2)"
+        },
+        {
+          "name": "l_tax",
+          "type": "DECIMAL(12, 2)"
+        },
+        {
+          "name": "l_returnflag",
+          "type": "VARCHAR(1)"
+        },
+        {
+          "name": "l_linestatus",
+          "type": "VARCHAR(1)"
+        },
+        {
+          "name": "l_shipdate",
+          "type": "DATE"
+        },
+        {
+          "name": "l_commitdate",
+          "type": "DATE"
+        },
+        {
+          "name": "l_receiptdate",
+          "type": "DATE"
+        },
+        {
+          "name": "l_shipinstruct",
+          "type": "VARCHAR(25)"
+        },
+        {
+          "name": "l_shipmode",
+          "type": "VARCHAR(10)"
+        },
+        {
+          "name": "l_comment",
+          "type": "VARCHAR(44)"
+        }
+      ],
+      "primary_key": []
+    }
+  ],
+  "relationships": []
+}

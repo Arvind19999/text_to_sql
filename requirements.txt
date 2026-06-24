@@ -1,0 +1,6 @@
+psycopg[binary]>=3.2
+redis>=5.0
+SQLAlchemy>=2.0
+PyMySQL>=1.1
+mariadb>=1.1
+snowflake-sqlalchemy>=1.10.1

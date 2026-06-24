@@ -20,6 +20,13 @@ from typing import Any
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+from session_store import (
+    DEFAULT_HISTORY_DATABASE_URL,
+    DEFAULT_REDIS_URL,
+    SessionStore,
+    SessionTurn,
+)
+
 
 MODEL_NAME = "deepseek-coder-v2:16b"
 OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
@@ -117,6 +124,10 @@ class Relationship:
 
 class UnsupportedDriverError(ValueError):
     """Raised when the selected driver is not a SQL database."""
+
+
+class SqlGenerationError(ValueError):
+    """Raised when the model output cannot be accepted as safe SQL."""
 
 
 def normalize_driver(driver_name: str) -> str:
@@ -292,14 +303,19 @@ def validate_read_only_sql(sql: str) -> None:
     first_word = re.match(r"^\s*([a-z]+)", lowered)
 
     if not first_word or first_word.group(1) not in {"select", "with"}:
-        raise ValueError("Generated SQL is not a SELECT/WITH query.")
+        raise SqlGenerationError(
+            "The request did not produce a read-only SQL query. "
+            "This tool only generates SELECT/WITH SQL from the provided schema."
+        )
 
     found_forbidden = FORBIDDEN_SQL_WORDS.intersection(
         re.findall(r"\b[a-z_]+\b", lowered)
     )
     if found_forbidden:
         words = ", ".join(sorted(found_forbidden))
-        raise ValueError(f"Generated SQL contains unsafe keyword(s): {words}")
+        raise SqlGenerationError(
+            f"Generated SQL was blocked because it contains unsafe keyword(s): {words}."
+        )
 
 
 def chat_with_ollama(
@@ -333,6 +349,67 @@ def chat_with_ollama(
             "Could not connect to Ollama. Make sure Ollama is running on "
             "http://localhost:11434 and the model is pulled."
         ) from error
+
+
+def format_turns_for_follow_up(turns: list[SessionTurn]) -> str:
+    formatted_turns = []
+    for index, turn in enumerate(turns, start=1):
+        formatted_turns.append(
+            f"""
+Turn {index}
+User request: {turn.user_instruction}
+Resolved instruction: {turn.resolved_instruction}
+Generated SQL:
+{turn.generated_sql}
+""".strip()
+        )
+
+    return "\n\n".join(formatted_turns)
+
+
+def resolve_follow_up_instruction(
+    user_instruction: str,
+    previous_turns: list[SessionTurn],
+    model: str = MODEL_NAME,
+    timeout: int = 600,
+) -> str:
+    if not previous_turns:
+        return user_instruction
+
+    system_prompt = """
+Rewrite the current user request into one standalone SQL-generation instruction.
+Use previous turns only to resolve references like now, same, that, it, include, remove, filter, group, or sort.
+If the current request is already standalone, return it unchanged.
+Do not generate SQL.
+Do not explain.
+Do not invent tables, columns, values, or business rules.
+Return only the rewritten instruction.
+""".strip()
+
+    user_prompt = f"""
+Previous turns:
+{format_turns_for_follow_up(previous_turns)}
+
+Current user request:
+{user_instruction}
+""".strip()
+
+    response = chat_with_ollama(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        options={
+            "temperature": 0.0,
+            "top_p": 0.9,
+            "num_predict": 256,
+        },
+        timeout=timeout,
+    )
+
+    resolved_instruction = remove_markdown_fences(response["message"]["content"])
+    return resolved_instruction or user_instruction
 
 
 def generate_sql(
@@ -371,6 +448,47 @@ def generate_sql(
     return sql
 
 
+def generate_sql_with_session(
+    session_id: str,
+    user_instruction: str,
+    driver_name: str,
+    schema: list[dict[str, Any]] | dict[str, Any],
+    session_store: SessionStore,
+    database_name: str | None = None,
+    model: str = MODEL_NAME,
+    timeout: int = 600,
+) -> tuple[str, str]:
+    session_store.init_postgres()
+    previous_turns = session_store.load_recent_turns(session_id)
+    resolved_instruction = resolve_follow_up_instruction(
+        user_instruction=user_instruction,
+        previous_turns=previous_turns,
+        model=model,
+        timeout=timeout,
+    )
+    sql = generate_sql(
+        user_instruction=resolved_instruction,
+        driver_name=driver_name,
+        schema=schema,
+        database_name=database_name,
+        model=model,
+        timeout=timeout,
+    )
+
+    session_store.save_turn(
+        session_id=session_id,
+        turn=SessionTurn(
+            user_instruction=user_instruction,
+            resolved_instruction=resolved_instruction,
+            generated_sql=sql,
+        ),
+        driver_name=driver_name,
+        database_name=database_name,
+    )
+
+    return sql, resolved_instruction
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate SQL using Ollama.")
     parser.add_argument("--driver", required=True, help="Database driver name.")
@@ -378,6 +496,40 @@ def main() -> None:
     parser.add_argument("--schema-file", required=True, help="JSON schema file path.")
     parser.add_argument("--database", help="Optional database name.")
     parser.add_argument("--model", default=MODEL_NAME, help="Ollama model name.")
+    parser.add_argument(
+        "--session-id",
+        help="Conversation/session id. Enables Redis + PostgreSQL follow-up memory.",
+    )
+    parser.add_argument(
+        "--redis-url",
+        default=DEFAULT_REDIS_URL,
+        help=f"Redis URL for active session context. Default: {DEFAULT_REDIS_URL}",
+    )
+    parser.add_argument(
+        "--history-db-url",
+        default=DEFAULT_HISTORY_DATABASE_URL,
+        help=(
+            "PostgreSQL URL for permanent chat history. "
+            f"Default: {DEFAULT_HISTORY_DATABASE_URL}"
+        ),
+    )
+    parser.add_argument(
+        "--history-turns",
+        type=int,
+        default=5,
+        help="Number of recent turns to use for follow-up resolution. Default: 5.",
+    )
+    parser.add_argument(
+        "--session-ttl",
+        type=int,
+        default=86400,
+        help="Redis session TTL in seconds. Default: 86400.",
+    )
+    parser.add_argument(
+        "--show-resolved",
+        action="store_true",
+        help="Print the resolved standalone instruction before the SQL.",
+    )
     parser.add_argument(
         "--timeout",
         type=int,
@@ -390,16 +542,42 @@ def main() -> None:
         schema = json.load(file)
 
     try:
-        sql = generate_sql(
-            user_instruction=args.question,
-            driver_name=args.driver,
-            schema=schema,
-            database_name=args.database,
-            model=args.model,
-            timeout=args.timeout,
-        )
-    except TimeoutError as error:
-        raise SystemExit(str(error)) from error
+        if args.session_id:
+            session_store = SessionStore(
+                redis_url=args.redis_url,
+                history_database_url=args.history_db_url,
+                max_recent_turns=args.history_turns,
+                redis_ttl_seconds=args.session_ttl,
+            )
+            sql, resolved_instruction = generate_sql_with_session(
+                session_id=args.session_id,
+                user_instruction=args.question,
+                driver_name=args.driver,
+                schema=schema,
+                session_store=session_store,
+                database_name=args.database,
+                model=args.model,
+                timeout=args.timeout,
+            )
+        else:
+            resolved_instruction = args.question
+            sql = generate_sql(
+                user_instruction=args.question,
+                driver_name=args.driver,
+                schema=schema,
+                database_name=args.database,
+                model=args.model,
+                timeout=args.timeout,
+            )
+    except (TimeoutError, ConnectionError, RuntimeError, SqlGenerationError) as error:
+        raise SystemExit(f"Error: {error}") from error
+    except UnsupportedDriverError as error:
+        raise SystemExit(f"Unsupported driver: {error}") from error
+    except ValueError as error:
+        raise SystemExit(f"Invalid request: {error}") from error
+
+    if args.show_resolved:
+        print(f"-- resolved instruction: {resolved_instruction}")
 
     print(sql)
 

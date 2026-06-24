@@ -1,0 +1,438 @@
+{
+  "database_type": "MySQL",
+  "selected_table": {
+    "schema": "telecoms",
+    "name": "customers"
+  },
+  "relationship_depth": 1,
+  "tables": [
+    {
+      "schema": "telecoms",
+      "name": "billing",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "bill_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "customer_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "bill_month",
+          "type": "DATE"
+        },
+        {
+          "name": "plan_charge",
+          "type": "DECIMAL(10, 2)"
+        },
+        {
+          "name": "call_charge",
+          "type": "DECIMAL(10, 2)"
+        },
+        {
+          "name": "data_charge",
+          "type": "DECIMAL(10, 2)"
+        },
+        {
+          "name": "sms_charge",
+          "type": "DECIMAL(10, 2)"
+        },
+        {
+          "name": "roaming_charge",
+          "type": "DECIMAL(10, 2)"
+        },
+        {
+          "name": "tax_amount",
+          "type": "DECIMAL(10, 2)"
+        },
+        {
+          "name": "total_amount",
+          "type": "DECIMAL(10, 2)"
+        },
+        {
+          "name": "due_date",
+          "type": "DATE"
+        },
+        {
+          "name": "payment_date",
+          "type": "DATE"
+        },
+        {
+          "name": "payment_status",
+          "type": "ENUM"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP"
+        }
+      ],
+      "primary_key": [
+        "bill_id"
+      ]
+    },
+    {
+      "schema": "telecoms",
+      "name": "calls",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "call_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "caller_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "receiver_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "tower_id",
+          "type": "INTEGER"
+        },
+        {
+          "name": "call_type",
+          "type": "ENUM"
+        },
+        {
+          "name": "direction",
+          "type": "ENUM"
+        },
+        {
+          "name": "start_time",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "duration_sec",
+          "type": "INTEGER"
+        },
+        {
+          "name": "call_status",
+          "type": "ENUM"
+        },
+        {
+          "name": "charge_amount",
+          "type": "DECIMAL(8, 4)"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP"
+        }
+      ],
+      "primary_key": [
+        "call_id"
+      ]
+    },
+    {
+      "schema": "telecoms",
+      "name": "complaints",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "complaint_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "customer_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "category",
+          "type": "ENUM"
+        },
+        {
+          "name": "description",
+          "type": "TEXT"
+        },
+        {
+          "name": "priority",
+          "type": "ENUM"
+        },
+        {
+          "name": "status",
+          "type": "ENUM"
+        },
+        {
+          "name": "assigned_to",
+          "type": "VARCHAR(100)"
+        },
+        {
+          "name": "opened_at",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "resolved_at",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "resolution",
+          "type": "TEXT"
+        }
+      ],
+      "primary_key": [
+        "complaint_id"
+      ]
+    },
+    {
+      "schema": "telecoms",
+      "name": "customers",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "full_name",
+          "type": "VARCHAR(200)"
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR(150)"
+        },
+        {
+          "name": "phone",
+          "type": "VARCHAR(20)"
+        },
+        {
+          "name": "gender",
+          "type": "ENUM"
+        },
+        {
+          "name": "dob",
+          "type": "DATE"
+        },
+        {
+          "name": "region_id",
+          "type": "INTEGER"
+        },
+        {
+          "name": "plan_id",
+          "type": "INTEGER"
+        },
+        {
+          "name": "customer_type",
+          "type": "ENUM"
+        },
+        {
+          "name": "kyc_status",
+          "type": "ENUM"
+        },
+        {
+          "name": "activation_date",
+          "type": "DATE"
+        },
+        {
+          "name": "is_active",
+          "type": "TINYINT"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP"
+        }
+      ],
+      "primary_key": [
+        "customer_id"
+      ]
+    },
+    {
+      "schema": "telecoms",
+      "name": "devices",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "device_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "customer_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "imei",
+          "type": "VARCHAR(20)"
+        },
+        {
+          "name": "brand",
+          "type": "VARCHAR(50)"
+        },
+        {
+          "name": "model",
+          "type": "VARCHAR(100)"
+        },
+        {
+          "name": "os_type",
+          "type": "ENUM"
+        },
+        {
+          "name": "network_type",
+          "type": "ENUM"
+        },
+        {
+          "name": "registered_at",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "is_active",
+          "type": "TINYINT"
+        }
+      ],
+      "primary_key": [
+        "device_id"
+      ]
+    },
+    {
+      "schema": "telecoms",
+      "name": "plans",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "plan_id",
+          "type": "INTEGER"
+        },
+        {
+          "name": "plan_name",
+          "type": "VARCHAR(100)"
+        },
+        {
+          "name": "plan_type",
+          "type": "ENUM"
+        },
+        {
+          "name": "monthly_fee",
+          "type": "DECIMAL(10, 2)"
+        },
+        {
+          "name": "data_limit_gb",
+          "type": "DECIMAL(6, 2)"
+        },
+        {
+          "name": "call_minutes",
+          "type": "INTEGER"
+        },
+        {
+          "name": "sms_limit",
+          "type": "INTEGER"
+        },
+        {
+          "name": "speed_mbps",
+          "type": "INTEGER"
+        },
+        {
+          "name": "is_active",
+          "type": "TINYINT"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP"
+        }
+      ],
+      "primary_key": [
+        "plan_id"
+      ]
+    },
+    {
+      "schema": "telecoms",
+      "name": "regions",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "region_id",
+          "type": "INTEGER"
+        },
+        {
+          "name": "region_name",
+          "type": "VARCHAR(100)"
+        },
+        {
+          "name": "country",
+          "type": "VARCHAR(100)"
+        },
+        {
+          "name": "zone",
+          "type": "VARCHAR(50)"
+        },
+        {
+          "name": "district",
+          "type": "VARCHAR(100)"
+        },
+        {
+          "name": "area_type",
+          "type": "ENUM"
+        },
+        {
+          "name": "population",
+          "type": "INTEGER"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP"
+        }
+      ],
+      "primary_key": [
+        "region_id"
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "from_schema": "telecoms",
+      "from_table": "billing",
+      "from_column": "customer_id",
+      "to_schema": "telecoms",
+      "to_table": "customers",
+      "to_column": "customer_id"
+    },
+    {
+      "from_schema": "telecoms",
+      "from_table": "calls",
+      "from_column": "caller_id",
+      "to_schema": "telecoms",
+      "to_table": "customers",
+      "to_column": "customer_id"
+    },
+    {
+      "from_schema": "telecoms",
+      "from_table": "calls",
+      "from_column": "receiver_id",
+      "to_schema": "telecoms",
+      "to_table": "customers",
+      "to_column": "customer_id"
+    },
+    {
+      "from_schema": "telecoms",
+      "from_table": "complaints",
+      "from_column": "customer_id",
+      "to_schema": "telecoms",
+      "to_table": "customers",
+      "to_column": "customer_id"
+    },
+    {
+      "from_schema": "telecoms",
+      "from_table": "customers",
+      "from_column": "region_id",
+      "to_schema": "telecoms",
+      "to_table": "regions",
+      "to_column": "region_id"
+    },
+    {
+      "from_schema": "telecoms",
+      "from_table": "customers",
+      "from_column": "plan_id",
+      "to_schema": "telecoms",
+      "to_table": "plans",
+      "to_column": "plan_id"
+    },
+    {
+      "from_schema": "telecoms",
+      "from_table": "devices",
+      "from_column": "customer_id",
+      "to_schema": "telecoms",
+      "to_table": "customers",
+      "to_column": "customer_id"
+    }
+  ]
+}

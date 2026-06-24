@@ -1,0 +1,92 @@
+MYSQL 
+python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schema_details.py \
+  --driver mysql \
+  --connection-string 'mysql+pymysql://db_superadmin:DbSup3rAdm1n!2026@mysql.db.datafuseai.org:13306/telecoms' \
+  --table telecoms.customers \
+  --depth 1 \
+  --output selected_schema.json
+
+for question ask
+python3 query_ai_with_olama_and_deepseek.py   --driver mysql --session-id test-session-1   --schema-file selected_schema.json   --question " i want to get customer name,email,birth date, call durations, what  devices he/she has used, users region details with tax amount "
+
+=================================================================================================================================================================================================================================================================================================
+
+
+MAraiDB
+python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schema_details.py \
+  --driver mariadb \
+  --connection-string 'mariadb+pymysql://tpch_writer:TpchWr1te!2026@mariadb.db.datafuseai.org:13307/tpch_maria_results' \
+  --table tpch_maria_results.departments \
+  --depth 2 \
+  --output selected_schema.json
+
+
+python3 query_ai_with_olama_and_deepseek.py   --driver mariadb --session-id test-maraidb-session-1   --schema-file selected_schema.json   --question "employee belonging to Engineering, get theri email ,when they joined with their perks also get the porjects they are involved"
+
+=================================================================================================================================================================================================================================================================================================
+
+MSSQL
+python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schema_details.py \
+  --driver mssql \
+  --connection-string "mssql+pyodbc://user:password@host:1433/database?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes" \
+  --schema dbo \
+  --table users \
+  --depth 1 \
+  --output selected_schema.json
+
+=================================================================================================================================================================================================================================================================================================
+
+Oracle
+python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schema_details.py \
+  --driver oracle \
+  --connection-string "oracle+oracledb://user:password@host:1521/?service_name=service_name" \
+  --schema USER_SCHEMA \
+  --table USERS \
+  --depth 1 \
+  --output selected_schema.json
+=================================================================================================================================================================================================================================================================================================
+
+IBMDB
+python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schema_details.py \
+  --driver ibmdb2 \
+  --connection-string "db2+ibm_db://user:password@host:50000/database" \
+  --schema USER_SCHEMA \
+  --table USERS \
+  --depth 1 \
+  --output selected_schema.json
+=================================================================================================================================================================================================================================================================================================
+
+SPAHANA
+python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schema_details.py \
+  --driver saphana \
+  --connection-string "hana+hdbcli://user:password@host:30015" \
+  --schema USER_SCHEMA \
+  --table USERS \
+  --depth 1 \
+  --output selected_schema.json
+=================================================================================================================================================================================================================================================================================================
+
+SNOWFLAKE
+python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schema_details.py \
+  --driver snowflake \
+  --connection-string 'snowflake://ARVIND:Qwerty*999999#@OWIQJTD-YH63222/SNOWFLAKE_SAMPLE_DATA/TPCH_SF1?warehouse=COMPUTE_WH&role=ACCOUNTADMIN' \
+  --table tpch_sf1000.lineitem \
+  --depth 2 \
+  --output selected_schema.json
+
+
+python3 query_ai_with_olama_and_deepseek.py   --driver snowflake --session-id test-snowflake-session-1   --schema-file selected_schema.json   --question "get me python code to check palindrom number"
+
+=================================================================================================================================================================================================================================================================================================
+
+POSTGRESQL
+python3 /home/arvind/Desktop/courses_practice/sql_ai/for_different_src/get_schema_details.py \
+  --driver postgresql \
+  --connection-string "postgresql+psycopg://user:password@host:5432/database" \
+  --schema public \
+  --table users \
+  --depth 1 \
+  --output selected_schema.json
+
+
+  =================================================================================================================================================================================================================================================================================================

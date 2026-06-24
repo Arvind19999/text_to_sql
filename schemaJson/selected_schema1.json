@@ -1,0 +1,172 @@
+{
+  "database_type": "PostgreSQL",
+  "selected_table": {
+    "schema": "public",
+    "name": "employee"
+  },
+  "relationship_depth": 1,
+  "tables": [
+    {
+      "schema": "public",
+      "name": "employee",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "employee_id",
+          "type": "integer"
+        },
+        {
+          "name": "first_name",
+          "type": "character varying"
+        },
+        {
+          "name": "last_name",
+          "type": "character varying"
+        },
+        {
+          "name": "email",
+          "type": "character varying"
+        },
+        {
+          "name": "phone",
+          "type": "character varying"
+        },
+        {
+          "name": "hire_date",
+          "type": "date"
+        },
+        {
+          "name": "department",
+          "type": "character varying"
+        },
+        {
+          "name": "job_title",
+          "type": "character varying"
+        },
+        {
+          "name": "salary",
+          "type": "numeric"
+        },
+        {
+          "name": "status",
+          "type": "character varying"
+        },
+        {
+          "name": "manager_id",
+          "type": "integer"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone"
+        }
+      ],
+      "primary_key": [
+        "employee_id"
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "employee_details",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "detail_id",
+          "type": "integer"
+        },
+        {
+          "name": "employee_id",
+          "type": "integer"
+        },
+        {
+          "name": "date_of_birth",
+          "type": "date"
+        },
+        {
+          "name": "gender",
+          "type": "character varying"
+        },
+        {
+          "name": "marital_status",
+          "type": "character varying"
+        },
+        {
+          "name": "nationality",
+          "type": "character varying"
+        },
+        {
+          "name": "address_line1",
+          "type": "character varying"
+        },
+        {
+          "name": "city",
+          "type": "character varying"
+        },
+        {
+          "name": "state",
+          "type": "character varying"
+        },
+        {
+          "name": "country",
+          "type": "character varying"
+        },
+        {
+          "name": "postal_code",
+          "type": "character varying"
+        },
+        {
+          "name": "education_level",
+          "type": "character varying"
+        },
+        {
+          "name": "years_of_experience",
+          "type": "integer"
+        },
+        {
+          "name": "performance_score",
+          "type": "numeric"
+        },
+        {
+          "name": "last_promotion_date",
+          "type": "date"
+        },
+        {
+          "name": "bonus_percentage",
+          "type": "numeric"
+        },
+        {
+          "name": "is_remote",
+          "type": "boolean"
+        },
+        {
+          "name": "contract_type",
+          "type": "character varying"
+        },
+        {
+          "name": "emergency_contact",
+          "type": "character varying"
+        },
+        {
+          "name": "notes",
+          "type": "text"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp without time zone"
+        }
+      ],
+      "primary_key": [
+        "detail_id"
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "from_schema": "public",
+      "from_table": "employee_details",
+      "from_column": "employee_id",
+      "to_schema": "public",
+      "to_table": "employee",
+      "to_column": "employee_id"
+    }
+  ]
+}

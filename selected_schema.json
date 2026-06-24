@@ -1,75 +1,99 @@
 {
-  "database_type": "PostgreSQL",
+  "database_type": "MariaDB",
   "selected_table": {
-    "schema": "public",
-    "name": "employee"
+    "schema": "tpch_maria_results",
+    "name": "departments"
   },
-  "relationship_depth": 1,
+  "relationship_depth": 2,
   "tables": [
     {
-      "schema": "public",
-      "name": "employee",
+      "schema": "tpch_maria_results",
+      "name": "departments",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "department_id",
+          "type": "INTEGER"
+        },
+        {
+          "name": "department_name",
+          "type": "VARCHAR(100)"
+        },
+        {
+          "name": "location",
+          "type": "VARCHAR(100)"
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME"
+        }
+      ],
+      "primary_key": [
+        "department_id"
+      ]
+    },
+    {
+      "schema": "tpch_maria_results",
+      "name": "employee_projects",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER"
+        },
+        {
+          "name": "employee_id",
+          "type": "INTEGER"
+        },
+        {
+          "name": "project_id",
+          "type": "INTEGER"
+        },
+        {
+          "name": "role",
+          "type": "VARCHAR(50)"
+        },
+        {
+          "name": "assigned_at",
+          "type": "DATE"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ]
+    },
+    {
+      "schema": "tpch_maria_results",
+      "name": "employees",
       "type": "BASE TABLE",
       "columns": [
         {
           "name": "employee_id",
-          "type": "integer",
-          "nullable": false
+          "type": "INTEGER"
         },
         {
           "name": "first_name",
-          "type": "character varying",
-          "nullable": true
+          "type": "VARCHAR(50)"
         },
         {
           "name": "last_name",
-          "type": "character varying",
-          "nullable": true
+          "type": "VARCHAR(50)"
         },
         {
           "name": "email",
-          "type": "character varying",
-          "nullable": true
+          "type": "VARCHAR(100)"
         },
         {
-          "name": "phone",
-          "type": "character varying",
-          "nullable": true
+          "name": "department_id",
+          "type": "INTEGER"
         },
         {
           "name": "hire_date",
-          "type": "date",
-          "nullable": true
-        },
-        {
-          "name": "department",
-          "type": "character varying",
-          "nullable": true
-        },
-        {
-          "name": "job_title",
-          "type": "character varying",
-          "nullable": true
+          "type": "DATE"
         },
         {
           "name": "salary",
-          "type": "numeric",
-          "nullable": true
-        },
-        {
-          "name": "status",
-          "type": "character varying",
-          "nullable": true
-        },
-        {
-          "name": "manager_id",
-          "type": "integer",
-          "nullable": true
-        },
-        {
-          "name": "created_at",
-          "type": "timestamp without time zone",
-          "nullable": true
+          "type": "DECIMAL(10, 2)"
         }
       ],
       "primary_key": [
@@ -77,128 +101,117 @@
       ]
     },
     {
-      "schema": "public",
-      "name": "employee_details",
+      "schema": "tpch_maria_results",
+      "name": "projects",
       "type": "BASE TABLE",
       "columns": [
         {
-          "name": "detail_id",
-          "type": "integer",
-          "nullable": false
+          "name": "project_id",
+          "type": "INTEGER"
         },
         {
-          "name": "employee_id",
-          "type": "integer",
-          "nullable": true
+          "name": "project_name",
+          "type": "VARCHAR(100)"
         },
         {
-          "name": "date_of_birth",
-          "type": "date",
-          "nullable": true
+          "name": "department_id",
+          "type": "INTEGER"
         },
         {
-          "name": "gender",
-          "type": "character varying",
-          "nullable": true
+          "name": "start_date",
+          "type": "DATE"
         },
         {
-          "name": "marital_status",
-          "type": "character varying",
-          "nullable": true
+          "name": "end_date",
+          "type": "DATE"
         },
         {
-          "name": "nationality",
-          "type": "character varying",
-          "nullable": true
+          "name": "budget",
+          "type": "DECIMAL(12, 2)"
         },
         {
-          "name": "address_line1",
-          "type": "character varying",
-          "nullable": true
-        },
-        {
-          "name": "city",
-          "type": "character varying",
-          "nullable": true
-        },
-        {
-          "name": "state",
-          "type": "character varying",
-          "nullable": true
-        },
-        {
-          "name": "country",
-          "type": "character varying",
-          "nullable": true
-        },
-        {
-          "name": "postal_code",
-          "type": "character varying",
-          "nullable": true
-        },
-        {
-          "name": "education_level",
-          "type": "character varying",
-          "nullable": true
-        },
-        {
-          "name": "years_of_experience",
-          "type": "integer",
-          "nullable": true
-        },
-        {
-          "name": "performance_score",
-          "type": "numeric",
-          "nullable": true
-        },
-        {
-          "name": "last_promotion_date",
-          "type": "date",
-          "nullable": true
-        },
-        {
-          "name": "bonus_percentage",
-          "type": "numeric",
-          "nullable": true
-        },
-        {
-          "name": "is_remote",
-          "type": "boolean",
-          "nullable": true
-        },
-        {
-          "name": "contract_type",
-          "type": "character varying",
-          "nullable": true
-        },
-        {
-          "name": "emergency_contact",
-          "type": "character varying",
-          "nullable": true
-        },
-        {
-          "name": "notes",
-          "type": "text",
-          "nullable": true
-        },
-        {
-          "name": "updated_at",
-          "type": "timestamp without time zone",
-          "nullable": true
+          "name": "status",
+          "type": "ENUM"
         }
       ],
       "primary_key": [
-        "detail_id"
+        "project_id"
+      ]
+    },
+    {
+      "schema": "tpch_maria_results",
+      "name": "salaries",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "salary_id",
+          "type": "INTEGER"
+        },
+        {
+          "name": "employee_id",
+          "type": "INTEGER"
+        },
+        {
+          "name": "amount",
+          "type": "DECIMAL(10, 2)"
+        },
+        {
+          "name": "effective_from",
+          "type": "DATE"
+        },
+        {
+          "name": "effective_to",
+          "type": "DATE"
+        },
+        {
+          "name": "reason",
+          "type": "VARCHAR(100)"
+        }
+      ],
+      "primary_key": [
+        "salary_id"
       ]
     }
   ],
   "relationships": [
     {
-      "from_schema": "public",
-      "from_table": "employee_details",
+      "from_schema": "tpch_maria_results",
+      "from_table": "employee_projects",
       "from_column": "employee_id",
-      "to_schema": "public",
-      "to_table": "employee",
+      "to_schema": "tpch_maria_results",
+      "to_table": "employees",
+      "to_column": "employee_id"
+    },
+    {
+      "from_schema": "tpch_maria_results",
+      "from_table": "employee_projects",
+      "from_column": "project_id",
+      "to_schema": "tpch_maria_results",
+      "to_table": "projects",
+      "to_column": "project_id"
+    },
+    {
+      "from_schema": "tpch_maria_results",
+      "from_table": "employees",
+      "from_column": "department_id",
+      "to_schema": "tpch_maria_results",
+      "to_table": "departments",
+      "to_column": "department_id"
+    },
+    {
+      "from_schema": "tpch_maria_results",
+      "from_table": "projects",
+      "from_column": "department_id",
+      "to_schema": "tpch_maria_results",
+      "to_table": "departments",
+      "to_column": "department_id"
+    },
+    {
+      "from_schema": "tpch_maria_results",
+      "from_table": "salaries",
+      "from_column": "employee_id",
+      "to_schema": "tpch_maria_results",
+      "to_table": "employees",
       "to_column": "employee_id"
     }
   ]

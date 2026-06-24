@@ -4,7 +4,7 @@ from typing import Any
 
 
 DEFAULT_CONNECTION_STRING = (
-    "postgresql://db_superadmin:DbSup3rAdm1n!2026@pg.db.datafuseai.org:15432/tpch_pg_results"
+    "postgresql://db_superadmin:DbSup3rAdm1n!2026@pg.db.datafuseai.org:15432/tpch_pg_source_sf1"
 )
 
 
@@ -189,8 +189,7 @@ def fetch_columns_for_keys(cursor, table_keys: set[tuple[str, str]]) -> list[dic
             table_name AS table_name,
             column_name AS name,
             ordinal_position AS position,
-            data_type,
-            is_nullable
+            data_type
         FROM information_schema.columns
         WHERE table_schema NOT IN ('information_schema', 'pg_catalog')
           AND table_schema NOT LIKE 'pg_toast%%'
@@ -272,7 +271,6 @@ def group_columns_by_table(columns: list[dict[str, Any]]) -> dict[tuple[str, str
             {
                 "name": column["name"],
                 "type": column["data_type"],
-                "nullable": column["is_nullable"] == "YES",
             }
         )
 
