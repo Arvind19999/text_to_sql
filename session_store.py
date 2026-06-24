@@ -158,29 +158,159 @@ class SessionStore:
     # Public API
     # ---
 
-    def load_recent_turns(self, session_id: str) -> list[SessionTurn]:
+    def load_recent_turns(
+        self,
+        session_id: str,
+        schema_cache_key: str | None = None,
+    ) -> list[SessionTurn]:
         """
-        Load up to `max_recent_turns` recent turns for `session_id`.
+        Load up to `max_recent_turns` recent turns for `session_id`, scoped
+        to `schema_cache_key` when provided.
+
+        When schema_cache_key is given, only turns that were saved under the
+        same schema context are returned.  This allows the same session_id to
+        be reused across different schemas (e.g. public vs demo) without turns
+        from one schema contaminating follow-up resolution for another.
 
         Read strategy (Redis-first):
-        1. Try Redis — O(1) list slice, no SQL.
-        2. On cache miss, fall back to PostgreSQL — slower but always consistent.
+        1. Try Redis using the schema-scoped key — O(1) list slice, no SQL.
+        2. On cache miss, fall back to PostgreSQL filtered by schema_cache_key.
         3. If PostgreSQL returns data, warm the Redis cache before returning.
 
-        Returns an empty list for a brand-new session (no error raised).
+        Returns an empty list for a brand-new session or schema context.
         """
-        # Fast path: Redis cache hit
-        turns = self._load_recent_turns_from_redis(session_id)
+        # Fast path: Redis cache hit (schema-scoped key)
+        turns = self._load_recent_turns_from_redis(session_id, schema_cache_key)
         if turns:
             return turns
 
         # Slow path: cold cache — fetch from durable PostgreSQL storage
-        turns = self._load_recent_turns_from_postgres(session_id)
+        turns = self._load_recent_turns_from_postgres(session_id, schema_cache_key)
         if turns:
-            # Warm the Redis cache so the next request is fast
-            self._refresh_redis(session_id, turns)
+            # Warm the Redis cache so the next request for this schema is fast
+            self._refresh_redis(session_id, turns, schema_cache_key)
 
         return turns
+
+    def list_sessions(
+        self,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """
+        Return a summary list of all (session_id, schema_cache_key) contexts,
+        ordered by most recently active first.
+
+        Each entry represents one focused conversation — the same unit shown
+        as a single item in the ChatGPT-style sidebar.  A single session_id
+        can appear multiple times if the user queried different schemas in it.
+
+        Each returned dict contains:
+          session_id       : the original readable session identifier.
+          schema_cache_key : the Redis schema key for this context (or None).
+          driver_name      : database driver used (e.g. "postgresql").
+          database_name    : database name (e.g. "tpch").
+          title            : first user instruction — used as the sidebar label.
+          turn_count       : total number of turns in this context.
+          last_active      : timestamp of the most recent turn.
+          created_at       : timestamp of the first turn.
+        """
+        with self._connect_postgres() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        cs.memory_key          AS session_id,
+                        ct.schema_cache_key,
+                        cs.driver_name,
+                        cs.database_name,
+                        -- First user instruction becomes the conversation title
+                        MIN(ct.user_instruction)  AS title,
+                        COUNT(*)                  AS turn_count,
+                        MAX(ct.created_at)        AS last_active,
+                        MIN(ct.created_at)        AS created_at
+                    FROM chat_turns ct
+                    JOIN chat_sessions cs ON cs.id = ct.session_id
+                    GROUP BY
+                        cs.memory_key,
+                        ct.schema_cache_key,
+                        cs.driver_name,
+                        cs.database_name
+                    ORDER BY last_active DESC
+                    LIMIT %s;
+                    """,
+                    (limit,),
+                )
+                columns = [desc[0] for desc in cursor.description]
+                rows = cursor.fetchall()
+
+        return [dict(zip(columns, row)) for row in rows]
+
+    def get_session_turns(
+        self,
+        session_id: str,
+        schema_cache_key: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Return all turns for a session, optionally scoped to schema_cache_key.
+
+        When schema_cache_key is provided only turns from that schema context
+        are returned — this matches one sidebar item in the history view.
+        When omitted, all turns for the session are returned regardless of
+        schema (useful for a full audit of what a user did in a session).
+
+        Each returned dict contains:
+          turn_number          : 1-based index within the context.
+          schema_cache_key     : schema context this turn belongs to.
+          user_instruction     : raw text the user typed.
+          resolved_instruction : standalone form after follow-up resolution.
+          generated_sql        : the validated SQL returned to the user.
+          created_at           : when this turn was saved.
+        """
+        history_session_id = self._history_session_id(session_id)
+
+        with self._connect_postgres() as connection:
+            with connection.cursor() as cursor:
+                if schema_cache_key:
+                    # Also match NULL rows — turns saved before the
+                    # schema_cache_key column existed (backward compatibility).
+                    cursor.execute(
+                        """
+                        SELECT
+                            ROW_NUMBER() OVER (ORDER BY id) AS turn_number,
+                            schema_cache_key,
+                            user_instruction,
+                            resolved_instruction,
+                            generated_sql,
+                            created_at
+                        FROM chat_turns
+                        WHERE session_id = %s
+                          AND (schema_cache_key = %s OR schema_cache_key IS NULL)
+                        ORDER BY id ASC;
+                        """,
+                        (history_session_id, schema_cache_key),
+                    )
+                else:
+                    # Return all turns across all schema contexts, ordered by
+                    # time so the caller can see the full session in sequence.
+                    cursor.execute(
+                        """
+                        SELECT
+                            ROW_NUMBER() OVER (ORDER BY id) AS turn_number,
+                            schema_cache_key,
+                            user_instruction,
+                            resolved_instruction,
+                            generated_sql,
+                            created_at
+                        FROM chat_turns
+                        WHERE session_id = %s
+                        ORDER BY id ASC;
+                        """,
+                        (history_session_id,),
+                    )
+                columns = [desc[0] for desc in cursor.description]
+                rows = cursor.fetchall()
+
+        return [dict(zip(columns, row)) for row in rows]
 
     def save_turn(
         self,
@@ -199,7 +329,7 @@ class SessionStore:
 
         Both writes happen for every turn to keep the two stores in sync.
         """
-        self._save_turn_to_redis(session_id, turn)
+        self._save_turn_to_redis(session_id, turn, schema_cache_key)
         self._save_turn_to_postgres(
             session_id=session_id,
             turn=turn,
@@ -208,9 +338,59 @@ class SessionStore:
             schema_cache_key=schema_cache_key,
         )
 
+    def save_schema(self, cache_key: str, schema: "dict | list") -> None:
+        """
+        Persist schema JSON to the schema_store table in PostgreSQL.
+
+        This is the durable backup for the Redis schema cache.  When Redis
+        expires (after 20 minutes by default), load_schema_from_cache() in
+        schema_cache.py reads from here and repopulates Redis automatically —
+        no manual re-run of get_schema_details.py needed.
+
+        Uses INSERT ... ON CONFLICT DO UPDATE so re-running get_schema_details.py
+        always overwrites the stored snapshot with the latest schema.
+        """
+        with self._connect_postgres() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO schema_store (cache_key, schema_json, saved_at)
+                    VALUES (%s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (cache_key)
+                    DO UPDATE SET
+                        schema_json = EXCLUDED.schema_json,
+                        saved_at = CURRENT_TIMESTAMP;
+                    """,
+                    (cache_key, json.dumps(schema, default=str)),
+                )
+
+    def load_schema(self, cache_key: str) -> "dict | list | None":
+        """
+        Load schema JSON from PostgreSQL.  Returns None if not found.
+
+        Called by load_schema_from_cache() in schema_cache.py when the Redis
+        cache has expired so the schema can be restored without re-fetching
+        from the source database.
+        """
+        with self._connect_postgres() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT schema_json FROM schema_store WHERE cache_key = %s;",
+                    (cache_key,),
+                )
+                row = cursor.fetchone()
+
+        if row is None:
+            return None
+        try:
+            return json.loads(row[0])
+        except json.JSONDecodeError:
+            return None
+
     def init_postgres(self) -> None:
         """
-        Create the chat_sessions and chat_turns tables if they do not exist.
+        Create the chat_sessions, chat_turns, and schema_store tables if they
+        do not exist.
 
         This method is idempotent (safe to call on every startup) because it
         uses CREATE TABLE IF NOT EXISTS.  It should be called once before any
@@ -235,6 +415,11 @@ class SessionStore:
           resolved_instruction TEXT — standalone resolved instruction.
           generated_sql        TEXT — validated SQL returned to the user.
           created_at           TIMESTAMP — when this turn was saved.
+
+        schema_store — durable backup for the Redis schema cache.
+          cache_key    TEXT PRIMARY KEY — matches the Redis schema cache key.
+          schema_json  TEXT NOT NULL    — full schema snapshot as JSON.
+          saved_at     TIMESTAMP        — when the snapshot was last written.
         """
         with self._connect_postgres() as connection:
             with connection.cursor() as cursor:
@@ -285,10 +470,39 @@ class SessionStore:
                     CREATE TABLE IF NOT EXISTS chat_turns (
                         id BIGSERIAL PRIMARY KEY,
                         session_id UUID REFERENCES chat_sessions(id),
+                        schema_cache_key TEXT,
                         user_instruction TEXT NOT NULL,
                         resolved_instruction TEXT NOT NULL,
                         generated_sql TEXT NOT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                    """
+                )
+                # Older databases may have chat_turns without schema_cache_key.
+                # Add it idempotently so existing history is preserved.
+                cursor.execute(
+                    """
+                    ALTER TABLE chat_turns
+                    ADD COLUMN IF NOT EXISTS schema_cache_key TEXT;
+                    """
+                )
+                # Index on (session_id, schema_cache_key) makes the filtered
+                # load_recent_turns query fast even with thousands of turns.
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_chat_turns_session_schema
+                    ON chat_turns (session_id, schema_cache_key);
+                    """
+                )
+                # schema_store — durable backup of the Redis schema cache.
+                # When Redis expires, load_schema_from_cache() restores the
+                # schema from here without re-fetching from the source database.
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS schema_store (
+                        cache_key   TEXT PRIMARY KEY,
+                        schema_json TEXT NOT NULL,
+                        saved_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
                     """
                 )
@@ -297,15 +511,21 @@ class SessionStore:
     # Key / ID helpers
     # ---
 
-    def _redis_key(self, session_id: str) -> str:
+    def _redis_key(self, session_id: str, schema_cache_key: str | None = None) -> str:
         """
         Build the Redis list key for a session's turn history.
 
-        Format: sql_ai:session:<session_id>:turns
+        Format (with schema):    sql_ai:session:<id>:<schema_cache_key>:turns
+        Format (without schema): sql_ai:session:<id>:turns
 
-        Using a namespaced key avoids collisions with other applications that
-        share the same Redis instance.
+        Including schema_cache_key in the key isolates turn history by schema
+        context so that the same session_id can be used for multiple schemas
+        without turns from one schema leaking into follow-up resolution for
+        another.  Falls back to the legacy key format when schema_cache_key is
+        not provided (backwards compatibility).
         """
+        if schema_cache_key:
+            return f"sql_ai:session:{session_id}:{schema_cache_key}:turns"
         return f"sql_ai:session:{session_id}:turns"
 
     def _history_session_id(self, session_id: str) -> str:
@@ -359,21 +579,24 @@ class SessionStore:
     # Redis read/write helpers
     # ---
 
-    def _load_recent_turns_from_redis(self, session_id: str) -> list[SessionTurn]:
+    def _load_recent_turns_from_redis(
+        self,
+        session_id: str,
+        schema_cache_key: str | None = None,
+    ) -> list[SessionTurn]:
         """
         Fetch the last `max_recent_turns` entries from the Redis list for this
-        session.
+        session, scoped to `schema_cache_key`.
 
-        Uses LRANGE with negative indices so only the tail of the list is
-        returned even if the list is longer (Redis LTRIM keeps it trimmed but
-        we use the slice here as a defensive measure too).
+        The schema-scoped key ensures turns from different schemas stored under
+        the same session_id are kept in separate Redis lists and never mixed.
 
         Silently skips entries whose JSON cannot be parsed (corrupt data).
         Returns an empty list when the key does not exist.
         """
         redis_client = self._redis_client()
         rows = redis_client.lrange(
-            self._redis_key(session_id),
+            self._redis_key(session_id, schema_cache_key),
             -self.max_recent_turns,
             -1,
         )
@@ -388,30 +611,41 @@ class SessionStore:
 
         return turns
 
-    def _save_turn_to_redis(self, session_id: str, turn: SessionTurn) -> None:
+    def _save_turn_to_redis(
+        self,
+        session_id: str,
+        turn: SessionTurn,
+        schema_cache_key: str | None = None,
+    ) -> None:
         """
-        Append a turn to the Redis list, trim to the rolling window, and
-        refresh the TTL.
+        Append a turn to the schema-scoped Redis list, trim to the rolling
+        window, and refresh the TTL.
 
         RPUSH   — append to the tail (chronological order).
         LTRIM   — keep only the last max_recent_turns entries.
         EXPIRE  — reset TTL so active sessions never expire mid-conversation.
         """
         redis_client = self._redis_client()
-        key = self._redis_key(session_id)
+        key = self._redis_key(session_id, schema_cache_key)
         redis_client.rpush(key, json.dumps(turn.to_dict()))
         redis_client.ltrim(key, -self.max_recent_turns, -1)
         redis_client.expire(key, self.redis_ttl_seconds)
 
-    def _refresh_redis(self, session_id: str, turns: list[SessionTurn]) -> None:
+    def _refresh_redis(
+        self,
+        session_id: str,
+        turns: list[SessionTurn],
+        schema_cache_key: str | None = None,
+    ) -> None:
         """
-        Warm (or re-warm) the Redis cache for a session from a list of turns.
+        Warm (or re-warm) the Redis cache for a session+schema from a list
+        of turns fetched from PostgreSQL.
 
         Called when load_recent_turns() falls back to PostgreSQL so that the
-        next request for the same session hits Redis.
+        next request for the same session+schema hits Redis.
 
         Steps:
-        1. DELETE the existing key (stale or empty).
+        1. DELETE the existing schema-scoped key (stale or empty).
         2. RPUSH each turn in chronological order (oldest first).
         3. EXPIRE with the configured TTL.
 
@@ -419,7 +653,7 @@ class SessionStore:
         inflating Redis with more history than the model will ever use.
         """
         redis_client = self._redis_client()
-        key = self._redis_key(session_id)
+        key = self._redis_key(session_id, schema_cache_key)
         redis_client.delete(key)
         for turn in turns[-self.max_recent_turns :]:
             redis_client.rpush(key, json.dumps(turn.to_dict()))
@@ -456,33 +690,59 @@ class SessionStore:
     # PostgreSQL read/write helpers
     # ---
 
-    def _load_recent_turns_from_postgres(self, session_id: str) -> list[SessionTurn]:
+    def _load_recent_turns_from_postgres(
+        self,
+        session_id: str,
+        schema_cache_key: str | None = None,
+    ) -> list[SessionTurn]:
         """
         Fetch the most recent `max_recent_turns` turns from PostgreSQL for the
-        given session.
+        given session, optionally filtered by schema_cache_key.
+
+        When schema_cache_key is provided, only turns saved under that schema
+        context are returned — this is what enables multi-schema support within
+        a single session_id.
 
         Query strategy:
-        - ORDER BY id DESC LIMIT N  → fetches the N newest rows efficiently
-          using the BIGSERIAL primary key index.
-        - reversed(rows)            → re-orders them oldest-first before
-          returning so callers receive turns in chronological order.
+        - Filter by (session_id, schema_cache_key) using the composite index
+          idx_chat_turns_session_schema for fast retrieval.
+        - ORDER BY id DESC LIMIT N  → fetches the N newest rows.
+        - reversed(rows)            → re-orders oldest-first before returning.
 
-        Returns an empty list when the session has no stored turns.
+        Returns an empty list when the session/schema context has no turns.
         """
         history_session_id = self._history_session_id(session_id)
 
         with self._connect_postgres() as connection:
             with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT user_instruction, resolved_instruction, generated_sql
-                    FROM chat_turns
-                    WHERE session_id = %s
-                    ORDER BY id DESC
-                    LIMIT %s;
-                    """,
-                    (history_session_id, self.max_recent_turns),
-                )
+                if schema_cache_key:
+                    # Filtered query: turns for this schema context.
+                    # Also include rows where schema_cache_key IS NULL — these
+                    # are turns saved before the column was added and belong to
+                    # the session without a schema tag (backward compatibility).
+                    cursor.execute(
+                        """
+                        SELECT user_instruction, resolved_instruction, generated_sql
+                        FROM chat_turns
+                        WHERE session_id = %s
+                          AND (schema_cache_key = %s OR schema_cache_key IS NULL)
+                        ORDER BY id DESC
+                        LIMIT %s;
+                        """,
+                        (history_session_id, schema_cache_key, self.max_recent_turns),
+                    )
+                else:
+                    # Unscoped query: backward-compatible, returns all turns
+                    cursor.execute(
+                        """
+                        SELECT user_instruction, resolved_instruction, generated_sql
+                        FROM chat_turns
+                        WHERE session_id = %s
+                        ORDER BY id DESC
+                        LIMIT %s;
+                        """,
+                        (history_session_id, self.max_recent_turns),
+                    )
                 rows = cursor.fetchall()
 
         # reversed() restores chronological (oldest → newest) order
@@ -553,19 +813,23 @@ class SessionStore:
                         database_name,
                     ),
                 )
-                # Insert the turn — always a new row, never updated
+                # Insert the turn — always a new row, never updated.
+                # schema_cache_key is stored here so load_recent_turns() can
+                # filter turns by schema context without joining chat_sessions.
                 cursor.execute(
                     """
                     INSERT INTO chat_turns (
                         session_id,
+                        schema_cache_key,
                         user_instruction,
                         resolved_instruction,
                         generated_sql
                     )
-                    VALUES (%s, %s, %s, %s);
+                    VALUES (%s, %s, %s, %s, %s);
                     """,
                     (
                         history_session_id,
+                        schema_cache_key,
                         turn.user_instruction,
                         turn.resolved_instruction,
                         turn.generated_sql,

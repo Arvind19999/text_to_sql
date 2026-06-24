@@ -997,7 +997,9 @@ def generate_sql_with_session(
     session_store.init_postgres()
 
     # Load prior turns to enable follow-up context resolution
-    previous_turns = session_store.load_recent_turns(session_id)
+    # Load only turns that belong to the same schema context so follow-up
+    # resolution never mixes turns from public.employee with demo.orders etc.
+    previous_turns = session_store.load_recent_turns(session_id, schema_cache_key)
 
     # Rewrite any context-dependent references into a standalone instruction
     resolved_instruction = resolve_follow_up_instruction(

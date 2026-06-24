@@ -14,10 +14,11 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from session_store import DEFAULT_REDIS_URL
+from session_store import DEFAULT_HISTORY_DATABASE_URL, DEFAULT_REDIS_URL, SessionStore
 
 
 # Default schema cache lifetime: 20 minutes.
+# After this the schema must be re-populated by re-running get_schema_details.py.
 DEFAULT_SCHEMA_CACHE_TTL_SECONDS = 20 * 60
 
 
@@ -66,13 +67,17 @@ def save_schema_to_cache(
     cache_key: str,
     redis_url: str = DEFAULT_REDIS_URL,
     ttl_seconds: int = DEFAULT_SCHEMA_CACHE_TTL_SECONDS,
+    history_database_url: str = DEFAULT_HISTORY_DATABASE_URL,
 ) -> str:
     """
-    Save schema metadata to Redis and return the full Redis key.
+    Save schema metadata to Redis (hot cache) and PostgreSQL (durable backup).
 
-    The payload wraps the schema with cache metadata.  The generator reads only
-    the "schema" field for prompting, while the timestamps help you inspect the
-    cache during debugging.
+    Redis stores the schema with a short TTL (default 20 minutes) for fast
+    reads.  PostgreSQL stores it permanently so load_schema_from_cache() can
+    restore Redis automatically when the TTL expires — no manual re-run of
+    get_schema_details.py needed.
+
+    Returns the full Redis key.
     """
     redis_key = normalize_schema_cache_key(cache_key)
     ttl = max(int(ttl_seconds), 60)
@@ -83,11 +88,25 @@ def save_schema_to_cache(
         "ttl_seconds": ttl,
     }
 
+    # Write to Redis (hot cache with TTL)
     try:
         client = _redis_client(redis_url)
         client.setex(redis_key, ttl, json.dumps(envelope, default=str))
     except Exception as error:
         raise SchemaCacheError(f"Could not write schema to Redis: {error}") from error
+
+    # Write to PostgreSQL (durable backup — survives Redis restarts and TTL expiry)
+    try:
+        store = SessionStore(
+            redis_url=redis_url,
+            history_database_url=history_database_url,
+        )
+        store.init_postgres()
+        store.save_schema(cache_key, schema)
+    except Exception as error:
+        # Non-fatal: Redis write succeeded above; PostgreSQL backup is best-effort.
+        # The schema is still usable for the current session — log and continue.
+        print(f"Warning: schema saved to Redis but PostgreSQL backup failed: {error}")
 
     return redis_key
 
@@ -95,13 +114,17 @@ def save_schema_to_cache(
 def load_schema_from_cache(
     cache_key: str,
     redis_url: str = DEFAULT_REDIS_URL,
+    history_database_url: str = DEFAULT_HISTORY_DATABASE_URL,
 ) -> dict[str, Any] | list[dict[str, Any]]:
     """
-    Load schema metadata from Redis for SQL generation.
+    Load schema metadata for SQL generation.
 
-    A missing key usually means the TTL expired, Redis was restarted, or schema
-    extraction has not been run yet.  In that case the caller should refresh the
-    schema cache before asking the LLM to generate SQL.
+    Read strategy (Redis-first, PostgreSQL fallback):
+    1. Try Redis — sub-millisecond read for the common case.
+    2. On Redis miss (TTL expired or Redis restarted), load from PostgreSQL
+       and repopulate Redis so the next request is fast again.
+    3. Raise SchemaCacheError only if both stores have no data (first-ever
+       run, or get_schema_details.py was never run for this cache key).
     """
     redis_key = normalize_schema_cache_key(cache_key)
 
@@ -112,9 +135,16 @@ def load_schema_from_cache(
         raise SchemaCacheError(f"Could not read schema from Redis: {error}") from error
 
     if not raw_payload:
+        # Redis miss — attempt to restore from PostgreSQL durable backup.
+        schema = _load_schema_from_postgres(cache_key, history_database_url)
+        if schema is not None:
+            # Repopulate Redis so subsequent requests are fast again.
+            _repopulate_redis(redis_key, schema, redis_url)
+            return schema
+
         raise SchemaCacheError(
-            f"Schema cache miss for '{redis_key}'. "
-            "Refresh schema metadata before generating SQL."
+            f"Schema not found for '{cache_key}'. "
+            "Run get_schema_details.py to populate the cache."
         )
 
     try:
@@ -129,3 +159,41 @@ def load_schema_from_cache(
         return payload["schema"]
 
     return payload
+
+
+def _load_schema_from_postgres(
+    cache_key: str,
+    history_database_url: str,
+) -> dict[str, Any] | list[dict[str, Any]] | None:
+    """
+    Load schema from the PostgreSQL schema_store table.  Returns None on miss.
+
+    This is only called when Redis has no entry for the cache key.
+    """
+    try:
+        store = SessionStore(history_database_url=history_database_url)
+        return store.load_schema(cache_key)
+    except Exception:
+        return None
+
+
+def _repopulate_redis(
+    redis_key: str,
+    schema: dict[str, Any] | list[dict[str, Any]],
+    redis_url: str,
+) -> None:
+    """
+    Write the schema back into Redis after a PostgreSQL fallback read.
+
+    Restores the standard envelope format with a fresh TTL so the next read
+    hits Redis again without touching PostgreSQL.  Non-fatal on failure.
+    """
+    try:
+        ttl = DEFAULT_SCHEMA_CACHE_TTL_SECONDS
+        now = datetime.now(timezone.utc).isoformat()
+        envelope = {"schema": schema, "cached_at": now, "ttl_seconds": ttl}
+        client = _redis_client(redis_url)
+        client.setex(redis_key, ttl, json.dumps(envelope, default=str))
+    except Exception:
+        # Non-fatal: the schema was already returned from PostgreSQL.
+        pass
